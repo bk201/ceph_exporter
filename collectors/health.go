@@ -69,9 +69,9 @@ type ClusterHealthCollector struct {
 	// missing, and are stuck in that state.
 	StuckDegradedPGs prometheus.Gauge
 
-	// UncleanPGs shows the no. of PGs that do not have all objects in the PG
+	// CleanPGs shows the no. of PGs that have all objects in the PG
 	// that are supposed to be in it.
-	UncleanPGs prometheus.Gauge
+	CleanPGs prometheus.Gauge
 
 	// StuckUncleanPGs shows the no. of PGs that do not have all objects in the PG
 	// that are supposed to be in it, and are stuck in that state.
@@ -267,11 +267,11 @@ func NewClusterHealthCollector(conn Conn, cluster string) *ClusterHealthCollecto
 				ConstLabels: labels,
 			},
 		),
-		UncleanPGs: prometheus.NewGauge(
+		CleanPGs: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   cephNamespace,
-				Name:        "unclean_pgs",
-				Help:        "No. of PGs in an unclean state",
+				Name:        "clean_pgs",
+				Help:        "No. of PGs in a clean state",
 				ConstLabels: labels,
 			},
 		),
@@ -477,7 +477,7 @@ func (c *ClusterHealthCollector) metricsList() []prometheus.Metric {
 		c.DegradedPGs,
 		c.ActivePGs,
 		c.StuckDegradedPGs,
-		c.UncleanPGs,
+		c.CleanPGs,
 		c.StuckUncleanPGs,
 		c.UndersizedPGs,
 		c.StuckUndersizedPGs,
@@ -607,7 +607,6 @@ func (c *ClusterHealthCollector) collect(ch chan<- prometheus.Metric) error {
 	var (
 		degradedRegex            = regexp.MustCompile(`([\d]+) pgs degraded`)
 		stuckDegradedRegex       = regexp.MustCompile(`([\d]+) pgs stuck degraded`)
-		uncleanRegex             = regexp.MustCompile(`([\d]+) pgs unclean`)
 		stuckUncleanRegex        = regexp.MustCompile(`([\d]+) pgs stuck unclean`)
 		undersizedRegex          = regexp.MustCompile(`([\d]+) pgs undersized`)
 		stuckUndersizedRegex     = regexp.MustCompile(`([\d]+) pgs stuck undersized`)
@@ -636,15 +635,6 @@ func (c *ClusterHealthCollector) collect(ch chan<- prometheus.Metric) error {
 				return err
 			}
 			c.StuckDegradedPGs.Set(float64(v))
-		}
-
-		matched = uncleanRegex.FindStringSubmatch(s.Summary)
-		if len(matched) == 2 {
-			v, err := strconv.Atoi(matched[1])
-			if err != nil {
-				return err
-			}
-			c.UncleanPGs.Set(float64(v))
 		}
 
 		matched = stuckUncleanRegex.FindStringSubmatch(s.Summary)
@@ -736,7 +726,7 @@ func (c *ClusterHealthCollector) collect(ch chan<- prometheus.Metric) error {
 	var (
 		degradedPGs      float64
 		activePGs        float64
-		uncleanPGs       float64
+		cleanPGs         float64
 		undersizedPGs    float64
 		peeringPGs       float64
 		stalePGs         float64
@@ -746,7 +736,7 @@ func (c *ClusterHealthCollector) collect(ch chan<- prometheus.Metric) error {
 		pgStateMap = map[string]*float64{
 			"degraded":       &degradedPGs,
 			"active":         &activePGs,
-			"unclean":        &uncleanPGs,
+			"clean":          &cleanPGs,
 			"undersized":     &undersizedPGs,
 			"peering":        &peeringPGs,
 			"stale":          &stalePGs,
@@ -769,8 +759,8 @@ func (c *ClusterHealthCollector) collect(ch chan<- prometheus.Metric) error {
 	if *pgStateMap["active"] > 0 {
 		c.ActivePGs.Set(*pgStateMap["active"])
 	}
-	if *pgStateMap["unclean"] > 0 {
-		c.UncleanPGs.Set(*pgStateMap["unclean"])
+	if *pgStateMap["clean"] > 0 {
+		c.CleanPGs.Set(*pgStateMap["clean"])
 	}
 	if *pgStateMap["undersized"] > 0 {
 		c.UndersizedPGs.Set(*pgStateMap["undersized"])
